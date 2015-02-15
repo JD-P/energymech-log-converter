@@ -41,6 +41,7 @@ def main():
   parser.add_argument("--output", "-o", help="Filepath to store output at, default is standard output.")
   parser.add_argument("--json", action="store_true", help="Output as a JSON archive.")
   parser.add_argument("--sqlite", action="store_true", help="Output as a SQLite database.")
+  parser.add_argument("--timezone", "-t", help="Specify the timezone as a UTC offset. (Not implemented.)")
 
   arguments = parser.parse_args()
   if arguments.json and arguments.sqlite:
@@ -67,9 +68,8 @@ def energymech_conv(directory, log_format):
     line_id = 0
     for filename in files:
       datestring = filename.split("_")[2].split(".")[0] #See "Misc 0" in project file.
-      datevalues = [int(datestring[0:4]), int(datestring[4:6]), int(datestring[6:])]
-      logdate = datetime.date(year=datevalues[0],month=datevalues[1],day=datevalues[2])
-      date_timestamp = time.mktime(logdate.timetuple())
+      logdate = time.strptime(datestring, "%Y%m%d")
+      date_timestamp = time.mktime(logdate)
       logpath = os.path.join(directory, filename)
       log_lines = energymech_parse(logpath, line_id)
       logs.update(date_timestamp:log_lines[1])
@@ -86,13 +86,28 @@ def energymech_parse(filepath, line_id):
   for line in lines:
     type_parse = line.split(" ", maxsplit=2) # Temporary three token space parse to determine type of line.
     if type_parse[1] != "***" and type_parse[1][0] == "<":
-      tokenlist.append([line_id, "PRIVMSG"].extend(type_parse))
+      tokenlist.append([line_id, "PRIVMSG", time2seconds(type_parse[0][1:-1])].extend(type_parse[1:])
   return (line_id, tokenlist)
 
-def time2nixtime(time_string):
+def time2seconds(time_string):
   """Convert a time string of the format HH:MM:SS or HH:MM to a timestamp in seconds."""
-  if len(time_string) != 8 and len(time_string) != 5:
-    raise ValueError("Time given to time2nixtime() was not a time_string.")
-  elif len(time_string) == 8:
-    time.
+  if len(time_string) != 8 and len(time_string) != 5: # Check if length is consistent with HH:MM:SS or HH:MM respectively.
+    raise ValueError("Time given to time2seconds() was not a time_string.")
+  for character in time_string:
+    if character in string.ascii_letters:
+      raise ValueError("Time given to time2seconds() was not a time_string.")
+  if len(time_string) == 8:
+    time_elements = time.strptime(time_string,"%H:%M:%S")
+    hours2minutes = time_elements.tm_hour * 60
+    minutes2seconds = hours2minutes + time_elements.tm_min
+    seconds = (minutes2seconds * 60) + time_elements.tm_sec
+    return seconds
+  elif len(time_string) == 5:
+    time_elements = time.strptime(time_string, "%H:%M")
+    hours2minutes = time.elements.tm_hour * 60
+    minutes2seconds = hours2minutes + time_elements.tm_min
+    seconds = minutes2seconds * 60
+    return seconds
+  else:
+    raise ValueError("'time_string' was proper length and contained no alphanumeric characters, but was somehow not the proper length when it is checked again to determine which routine should be used to process the string.")
   

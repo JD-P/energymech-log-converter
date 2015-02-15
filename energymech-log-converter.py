@@ -34,6 +34,8 @@ import time
 
 import datetime
 
+import string
+
 def main():
   """Implement command line interface and call subroutines to handle conversions."""
   parser = argparse.ArgumentParser()

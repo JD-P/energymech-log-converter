@@ -13,6 +13,28 @@ ahead. Further one cannot tell when the logger was started and when the logger
 was stopped, meaninging that the user could have started logging on the 3rd of
 June, took a two week hiatus and started logging again.
 
+Parsing:
+--------
+
+Lines from a channel logged in energymech format can be split into two categories:
+
+1. Normal PRIVMSG's sent to channel.
+
+2. Everything else.
+
+Since the former dominates the vast majority of lines in the log, it makes the 
+most sense to determine that something is not in the second category before employing 
+more complex methods.
+
+If we split the string representing a line into elements of a list along the 
+seperator " " (space) the second element should always be "***" for the second 
+category above. This means that if something does not have three astericks as its
+second split element it is a PRIVMSG. 
+
+The first part of the algorithm is to split the IRC line twice, so that you have three elements:
+
+[timestamp, username or "***", the rest of the line]
+
 Misc:
 -----
 

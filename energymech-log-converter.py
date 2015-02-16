@@ -74,7 +74,7 @@ def energymech_conv(directory, log_format):
       date_timestamp = time.mktime(logdate)
       logpath = os.path.join(directory, filename)
       log_lines = energymech_parse(logpath, line_id)
-      logs.update(date_timestamp:log_lines[1])
+      logs[date_timestamp] = log_lines[1]
       line_id += log_lines[0]
     return (logs)
   else:
@@ -82,13 +82,40 @@ def energymech_conv(directory, log_format):
 
 def energymech_parse(filepath, line_id):
   """Take a single log file in energymech format and parse it into a python datastructure."""
-  log = open(filepath, 'r')
+  log = open(filepath, 'r', encoding="latin-1")
   lines = log.readlines()
   tokenlist = []
   for line in lines:
-    type_parse = line.split(" ", maxsplit=2) # Temporary three token space parse to determine type of line.
+    type_parse = line.split(" ", 2) # Temporary three token space parse to determine type of line.
+    space_parse = line.split(" ") # Turns every space seperation into a token, doesn't handle closures such as closed parentheses intelligently.
+    timestamp = time2seconds(type_parse[0][1:-1])
     if type_parse[1] != "***" and type_parse[1][0] == "<":
-      tokenlist.append([line_id, "PRIVMSG", time2seconds(type_parse[0][1:-1])].extend(type_parse[1:])
+      tokenlist.append([line_id, "PRIVMSG", timestamp].extend(type_parse[1:])) #See "JSON line formats" in project file.
+    elif type_parse[1] == "*":
+      me_elements = line.split(" ", 3)
+      tokenlist.append([line_id, "PRIVMSG", timestamp, me_elements[2], me_elements[3]]) 
+    elif ''.join((type_parse[1][0], type_parse[1][-1])) == "--":
+      tokenlist.append([line_id, "NOTICE", timestamp].extend(type_parse[1:]))
+    elif space_parse[2] == "Joins:":
+      tokenlist.append([line_id, "JOIN", timestamp, space_parse[3], space_parse[4][:-1]])
+    elif space_parse[2] == "Parts:":
+      part_elements = line.split(" ", 5)[3:]
+      tokenlist.append([line_id, "PART", timestamp].extend(part_elements))
+    elif space_parse[2] == "Quits:":
+      quit_elements = line.split(" ", 5)[3:]
+      tokenlist.append([line_id, "QUIT", timestamp].extend(quit_elements))
+    elif space_parse[2]
+    elif ''.join(space_parse[3:5]) == "waskicked":
+      tokenlist.append([line_id, "KICK", timestamp, space_parse[2], space_parse[6], space_parse[7][:-1]])
+    elif ''.join(space_parse[4:7]) == "nowknownas":
+      tokenlist.append([line_id, "NICK", timestamp, space_parse[2], space_parse[-1:][0][:-1]])
+    elif ''.join(space_parse[3:5]) == "setsmode:":
+      setmode_elements = line.split(" ", 5)
+      tokenlist.append([line_id, "SETMODE", timestamp, setmode_elements[2], setmode_elements[5][:-1]])
+    elif ''.join(space_parse[3:5]) == "changestopic":
+      topic_element = line.split(" ", 6)[6]
+      tokenlist.append([line_id, "TOPIC", timestamp, space_parse[2], topic_element])
+    line_id += 1
   return (line_id, tokenlist)
 
 def time2seconds(time_string):

@@ -26,7 +26,7 @@ import argparse
 
 import json
 
-import sqlite
+import sqlite3
 
 import os
 
@@ -59,7 +59,7 @@ def main():
       jsondump = open(arguments.output, 'w')
       json.dump(jsondump, energymech_conv(arguments.Directory, "json"), indent=2)
     else:
-      print(json.dumps(jsondump, energymech_conv(arguments.Directory, "json", indent=2)))
+      print(json.dumps(energymech_conv(arguments.Directory, "json"), indent=2))
 
 def energymech_conv(directory, log_format):
   """Convert a set of log files in energymech format to JSON or SQLite."""
@@ -90,21 +90,24 @@ def energymech_parse(filepath, line_id):
     space_parse = line.split(" ") # Turns every space seperation into a token, doesn't handle closures such as closed parentheses intelligently.
     timestamp = time2seconds(type_parse[0][1:-1])
     if type_parse[1] != "***" and type_parse[1][0] == "<":
-      tokenlist.append([line_id, "PRIVMSG", timestamp].extend(type_parse[1:])) #See "JSON line formats" in project file.
+      privmsg_list = [line_id, "PRIVMSG", timestamp].extend(type_parse[1:]) #See "JSON line formats" in project file.
+      tokenlist.append(privmsg_list)
     elif type_parse[1] == "*":
       me_elements = line.split(" ", 3)
       tokenlist.append([line_id, "PRIVMSG", timestamp, me_elements[2], me_elements[3]]) 
     elif ''.join((type_parse[1][0], type_parse[1][-1])) == "--":
-      tokenlist.append([line_id, "NOTICE", timestamp].extend(type_parse[1:]))
+      notice_list = [line_id, "NOTICE", timestamp].extend(type_parse[1:])
+      tokenlist.append(notice_list)
     elif space_parse[2] == "Joins:":
       tokenlist.append([line_id, "JOIN", timestamp, space_parse[3], space_parse[4][:-1]])
     elif space_parse[2] == "Parts:":
       part_elements = line.split(" ", 5)[3:]
-      tokenlist.append([line_id, "PART", timestamp].extend(part_elements))
+      part_list = [line_id, "PART", timestamp].extend(part_elements)
+      tokenlist.append(part_list)
     elif space_parse[2] == "Quits:":
       quit_elements = line.split(" ", 5)[3:]
-      tokenlist.append([line_id, "QUIT", timestamp].extend(quit_elements))
-    elif space_parse[2]
+      quit_list = [line_id, "QUIT", timestamp].extend(quit_elements)
+      tokenlist.append(quit_list)
     elif ''.join(space_parse[3:5]) == "waskicked":
       tokenlist.append([line_id, "KICK", timestamp, space_parse[2], space_parse[6], space_parse[7][:-1]])
     elif ''.join(space_parse[4:7]) == "nowknownas":
@@ -140,3 +143,4 @@ def time2seconds(time_string):
   else:
     raise ValueError("'time_string' was proper length and contained no alphanumeric characters, but was somehow not the proper length when it is checked again to determine which routine should be used to process the string.")
   
+main()

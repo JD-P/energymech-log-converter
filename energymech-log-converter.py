@@ -57,7 +57,7 @@ def main():
   else:
     if arguments.output:
       jsondump = open(arguments.output, 'w')
-      json.dump(jsondump, energymech_conv(arguments.Directory, "json"), indent=2)
+      json.dump(energymech_conv(arguments.Directory, "json"), jsondump, indent=2)
     else:
       print(json.dumps(energymech_conv(arguments.Directory, "json"), indent=2))
 
@@ -67,28 +67,30 @@ def energymech_conv(directory, log_format):
     files = os.listdir(directory) 
     files.sort()
     logs = {}
-    line_id = 0
+    total_lines = 0
     for filename in files:
       datestring = filename.split("_")[2].split(".")[0] #See "Misc 0" in project file.
       logdate = time.strptime(datestring, "%Y%m%d")
-      date_timestamp = time.mktime(logdate)
+      date_timestamp = int(time.mktime(logdate))
       logpath = os.path.join(directory, filename)
-      log_lines = energymech_parse(logpath, line_id)
+      log_lines = energymech_parse(logpath, total_lines)
       logs[date_timestamp] = log_lines[1]
-      line_id += log_lines[0]
+      total_lines += log_lines[0]
     return (logs)
   else:
     raise ValueError(directory + " is not a directory.")
 
-def energymech_parse(filepath, line_id):
+def energymech_parse(filepath, total_lines):
   """Take a single log file in energymech format and parse it into a python datastructure."""
   log = open(filepath, 'r', encoding="latin-1")
   lines = log.readlines()
   tokenlist = []
+  lines_in_file = 0
   for line in lines:
     type_parse = line.split(" ", 2) # Temporary three token space parse to determine type of line.
     space_parse = line.split(" ") # Turns every space seperation into a token, doesn't handle closures such as closed parentheses intelligently.
     timestamp = time2seconds(type_parse[0][1:-1])
+    line_id = total_lines + lines_in_file
     if type_parse[1] != "***" and type_parse[1][0] == "<":
       privmsg_list = [line_id, "PRIVMSG", timestamp]
       privmsg_list.extend(type_parse[1:]) #See "JSON line formats" in project file.
@@ -122,8 +124,8 @@ def energymech_parse(filepath, line_id):
     elif ''.join(space_parse[3:5]) == "changestopic":
       topic_element = line.split(" ", 6)[6]
       tokenlist.append([line_id, "TOPIC", timestamp, space_parse[2], topic_element])
-    line_id += 1
-  return (line_id, tokenlist)
+    lines_in_file += 1
+  return (lines_in_file, tokenlist)
 
 def time2seconds(time_string):
   """Convert a time string of the format HH:MM:SS or HH:MM to a timestamp in seconds."""

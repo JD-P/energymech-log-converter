@@ -92,27 +92,29 @@ def energymech_parse(filepath, total_lines):
     timestamp = time2seconds(type_parse[0][1:-1])
     line_id = total_lines + lines_in_file
     if type_parse[1] != "***" and type_parse[1][0] == "<":
-      privmsg_list = [line_id, "PRIVMSG", timestamp]
-      privmsg_list.extend(type_parse[1:]) #See "JSON line formats" in project file.
+      privmsg_list = [line_id, "PRIVMSG", timestamp, type_parse[1][1:-1], type_parse[2][:-1]]  #See "JSON line formats" in project file.
       tokenlist.append(privmsg_list)
     elif type_parse[1] == "*":
       me_elements = line.split(" ", 3)
-      tokenlist.append([line_id, "PRIVMSG", timestamp, me_elements[2], me_elements[3]]) 
+      tokenlist.append([line_id, "PRIVMSG", timestamp, me_elements[2], "/me " + me_elements[3]]) 
     elif ''.join((type_parse[1][0], type_parse[1][-1])) == "--":
       notice_list = [line_id, "NOTICE", timestamp]
-      notice_list.extend(type_parse[1:])
+      notice_list.extend(type_parse[1:-1])
+      notice_list.append(type_parse[-1][:-1])
       tokenlist.append(notice_list)
     elif space_parse[2] == "Joins:":
       tokenlist.append([line_id, "JOIN", timestamp, space_parse[3], space_parse[4][:-1]])
     elif space_parse[2] == "Parts:":
-      part_elements = line.split(" ", 5)[3:]
+      part_elements = line.split(" ", 5)[3:-1]
       part_list = [line_id, "PART", timestamp]
       part_list.extend(part_elements)
+      part_list.append(part_elements[-1][:-1])
       tokenlist.append(part_list)
     elif space_parse[2] == "Quits:":
-      quit_elements = line.split(" ", 5)[3:]
+      quit_elements = line.split(" ", 5)[3:-1]
       quit_list = [line_id, "QUIT", timestamp]
       quit_list.extend(quit_elements)
+      quit_list.append(quit_elements[-1][:-1])
       tokenlist.append(quit_list)
     elif ''.join(space_parse[3:5]) == "waskicked":
       tokenlist.append([line_id, "KICK", timestamp, space_parse[2], space_parse[6], space_parse[7][:-1]])
@@ -123,7 +125,7 @@ def energymech_parse(filepath, total_lines):
       tokenlist.append([line_id, "SETMODE", timestamp, setmode_elements[2], setmode_elements[5][:-1]])
     elif ''.join(space_parse[3:5]) == "changestopic":
       topic_element = line.split(" ", 6)[6]
-      tokenlist.append([line_id, "TOPIC", timestamp, space_parse[2], topic_element])
+      tokenlist.append([line_id, "TOPIC", timestamp, space_parse[2], topic_element[:-1]])
     lines_in_file += 1
   return (lines_in_file, tokenlist)
 

@@ -1,7 +1,11 @@
 Energymech Log Converter:
-------------------------
+=========================
 
-Essential features of every message from an IRC server:
+Format selection:
+-----------------
+
+Format selection works off of modules which are imported into the main wrapper 
+program as the name of the format given with the --format option. 
 
 Time Handling:
 --------------

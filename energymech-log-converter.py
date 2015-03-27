@@ -20,6 +20,8 @@ Options
 
 --sqlite Output as a SQLite database.
 
+--format Convert log as <FORMAT>
+
 """
 
 import argparse
@@ -28,127 +30,41 @@ import json
 
 import sqlite3
 
-import os
+import importlib
 
-import time
+class conversion_wrapper():
+  """Wraps the various converters and imports them all into one unified interface."""
+  def main():
+    """Implement command line interface and call subroutines to handle conversions."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument("Directory", help="The directory in which the log files reside.")
+    parser.add_argument("--output", "-o", help="Filepath to store output at, default is standard output.")
+    formats_help = """\n\nValid formats are:\n\n\tjson\n\tsqlite"""
+    parser.add_argument("--oformat", help="The format to output." + formats_help)
+    parser.add_argument("--timezone", "-t", help="Specify the timezone as a UTC offset. (Not implemented.)")
+    parser.add_argument("--format", "-f", help="Convert log as <FORMAT>.")
 
-import datetime
+    arguments = parser.parse_args()
 
-import string
+    if arguments.oformat:
+      try:
+        converter = importlib.import_module("converters." + arguments.format)
+      except ImportError:
+        raise ValueError("Given format " + arguments.format.upper() + " has no valid converter.")
+      if arguments.oformat == "sqlite":
+        if arguments.output:
+          # To be implemented later
+          raise ValueError("SQL formatting not implemented at this time. Check back for further updates to this software.")
+        else:
+          raise ValueError("SQL formatting not implemented at this time. Check back for further updates to this software.")
+      else:
+        if arguments.output:
+          jsondump = open(arguments.output, 'w')
 
-def main():
-  """Implement command line interface and call subroutines to handle conversions."""
-  parser = argparse.ArgumentParser()
-  parser.add_argument("Directory", help="The directory in which the log files reside.")
-  parser.add_argument("--output", "-o", help="Filepath to store output at, default is standard output.")
-  parser.add_argument("--json", action="store_true", help="Output as a JSON archive.")
-  parser.add_argument("--sqlite", action="store_true", help="Output as a SQLite database.")
-  parser.add_argument("--timezone", "-t", help="Specify the timezone as a UTC offset. (Not implemented.)")
-
-  arguments = parser.parse_args()
-  if arguments.json and arguments.sqlite:
-    raise ValueError("Tried to output json and sqlite logs at the same time. Use one or the other.") 
-  elif arguments.sqlite:
-    if arguments.output:
-      # To be implemented later
-      raise ValueError("SQL formatting not implemented at this time. Check back for further updates to this software.")
+          json.dump(converter.convert(arguments.Directory, "json"), jsondump, indent=2)
+        else:
+          print(json.dumps(converter.convert(arguments.Directory, "json"), indent=2))
     else:
-      raise ValueError("SQL formatting not implemented at this time. Check back for further updates to this software.")
-  else:
-    if arguments.output:
-      jsondump = open(arguments.output, 'w')
-      json.dump(energymech_conv(arguments.Directory, "json"), jsondump, indent=2)
-    else:
-      print(json.dumps(energymech_conv(arguments.Directory, "json"), indent=2))
-
-def energymech_conv(directory, log_format):
-  """Convert a set of log files in energymech format to JSON or SQLite."""
-  if os.path.isdir(directory): 
-    files = os.listdir(directory) 
-    files.sort()
-    logs = {}
-    total_lines = 0
-    for filename in files:
-      datestring = filename.split("_")[2].split(".")[0] #See "Misc 0" in project file.
-      logdate = time.strptime(datestring, "%Y%m%d")
-      date_timestamp = int(time.mktime(logdate))
-      logpath = os.path.join(directory, filename)
-      log_lines = energymech_parse(logpath, total_lines)
-      logs[date_timestamp] = log_lines[1]
-      total_lines += log_lines[0]
-    return (logs)
-  else:
-    raise ValueError(directory + " is not a directory.")
-
-def energymech_parse(filepath, total_lines):
-  """Take a single log file in energymech format and parse it into a python datastructure."""
-  log = open(filepath, 'r', encoding="latin-1")
-  lines = log.readlines()
-  tokenlist = []
-  lines_in_file = 0
-  for line in lines:
-    type_parse = line.split(" ", 2) # Temporary three token space parse to determine type of line.
-    space_parse = line.split(" ") # Turns every space seperation into a token, doesn't handle closures such as closed parentheses intelligently.
-    timestamp = time2seconds(type_parse[0][1:-1])
-    line_id = total_lines + lines_in_file
-    if type_parse[1] != "***" and type_parse[1][0] == "<":
-      (nickname, message) = (type_parse[1][1:-1], type_parse[2][:-1])
-      tokenlist.append(privmsg_list = [line_id, "PRIVMSG", timestamp, nickname, message])
-    elif type_parse[1] == "*":
-      me_elements = line.split(" ", 3)
-      (nickname, message) = (me_elements[2], "/me " + me_elements[3][:-1])
-      tokenlist.append([line_id, "PRIVMSG", timestamp, nickname, message]) 
-    elif ''.join((type_parse[1][0], type_parse[1][-1])) == "--":
-      (nickname, message) = (type_parse[1][1:-1], type_parse[2][:-1])
-      tokenlist.append([line_id, "NOTICE", timestamp, nickname, message])
-    elif space_parse[2] == "Joins:":
-      (nickname, hostname) = (space_parse[3], space_parse[4][1:-2])
-      tokenlist.append([line_id, "JOIN", timestamp, nickname, hostname])
-    elif space_parse[2] == "Parts:":
-      part_elements = line.split(" ", 5)[3:]
-      (nickname, hostname, part_message) = (part_elements[0], part_elements[1][1:-1], part_elements[2][1:-2])
-      tokenlist.append([line_id, "PART", timestamp, nickname, hostname, part_message])
-    elif space_parse[2] == "Quits:":
-      quit_elements = line.split(" ", 5)[3:]
-      (nickname, hostname, quit_message) = (quit_elements[0], quit_elements[1][1:-1], quit_elements[2][1:-2])
-      tokenlist.append([line_id, "QUIT", timestamp, nickname, hostname, quit_message])
-    elif ''.join(space_parse[3:5]) == "waskicked":
-      (nick_kicked, kicked_by, kick_message) = (space_parse[2], space_parse[6], space_parse[7][1:-2])
-      tokenlist.append([line_id, "KICK", timestamp, nick_kicked, kicked_by, kick_message])
-    elif ''.join(space_parse[4:7]) == "nowknownas":
-      (nick_before, nick_after) = (space_parse[2], space_parse[-1][:-1])
-      tokenlist.append([line_id, "NICK", timestamp, nick_before, nick_after])
-    elif ''.join(space_parse[3:5]) == "setsmode:":
-      setmode_elements = line.split(" ", 5)
-      (set_by, mode_string) = (setmode_elements[2], setmode_elements[5][:-1])
-      tokenlist.append([line_id, "SETMODE", timestamp, set_by, mode_string])
-    elif ''.join(space_parse[3:5]) == "changestopic":
-      topic_element = line.split(" ", 6)[6]
-      (changed_by, topic) = (space_parse[2], topic_element[:-1])
-      tokenlist.append([line_id, "TOPIC", timestamp, changed_by, topic])
-    lines_in_file += 1
-  return (lines_in_file, tokenlist)
-
-def time2seconds(time_string):
-  """Convert a time string of the format HH:MM:SS or HH:MM to a timestamp in seconds."""
-  if len(time_string) != 8 and len(time_string) != 5: # Check if length is consistent with HH:MM:SS or HH:MM respectively.
-    raise ValueError("Time given to time2seconds() was not a time_string.")
-  for character in time_string:
-    if character in string.ascii_letters:
-      raise ValueError("Time given to time2seconds() was not a time_string.")
-  if len(time_string) == 8:
-    time_elements = time.strptime(time_string,"%H:%M:%S")
-    hours2minutes = time_elements.tm_hour * 60
-    minutes2seconds = hours2minutes + time_elements.tm_min
-    seconds = (minutes2seconds * 60) + time_elements.tm_sec
-    return seconds
-  elif len(time_string) == 5:
-    time_elements = time.strptime(time_string, "%H:%M")
-    hours2minutes = time.elements.tm_hour * 60
-    minutes2seconds = hours2minutes + time_elements.tm_min
-    seconds = minutes2seconds * 60
-    return seconds
-  else:
-    raise ValueError("'time_string' was proper length and contained no alphanumeric characters, but was somehow not the proper length when it is checked again to determine which routine should be used to process the string.")
+      raise ValueError("Did not specify an output format.")
   
-main()
+conversion_wrapper.main()

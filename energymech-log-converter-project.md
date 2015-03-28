@@ -44,7 +44,8 @@ The first part of the algorithm is to split the IRC line twice, so that you have
 
 Lines where the second element is a username are PRIVMSG's, and are stored as such.
 
-Message Types:
+Message Types for energymech:
+-----------------------------
 
 PRIVMSG, NOTICE, JOIN, PART, QUIT, KICK, NICK, SETMODE, TOPIC
 
@@ -65,6 +66,43 @@ NICK: [line_id, "NICK", timestamp in seconds, nick_before, nick_after]
 SETMODE: [line_id, "SETMODE", timestamp, set_by, mode_string]
 
 TOPIC: [line_id, "TOPIC", timestamp in seconds, changed_by, topic]
+
+Message types for toykeeper:
+----------------------------
+
+PRIVMSG, NOTICE, JOIN, PART, KICK, SETMODE, TOPIC, CTCP, JOINED, CONNECTED, DISCONNECTED
+
+PRIVMSG: [line_id, "PRIVMSG", timestamp in seconds, nickname, message]
+
+NOTICE: [line_id, "NOTICE", timestamp in seconds, nickname, message]
+
+JOIN: [line_id, "JOIN", timestamp in seconds, nickname, hostname]
+
+PART: [line_id, "PART", timestamp in seconds, nickname, hostname, part_message]
+
+KICK: [line_id, "KICK", timestamp in seconds, nick_kicked, kicked_by, kick_message]
+
+SETMODE: [line_id, "SETMODE", timestamp, set_by, mode_string]
+
+TOPIC: [line_id, "TOPIC", timestamp in seconds, changed_by, topic]
+
+CTCP: [line_id, "CTCP", timestamp in seconds, CTCP_message]
+
+JOINED: [line_id, "JOINED", timestamp in seconds]
+
+CONNECTED: [line_id, "CONNECTED", timestamp in seconds]
+
+DISCONNECTED: [line_id, "CONNECTED", timestamp in seconds]
+
+Meaning of special message types for toykeeper:
+
+JOINED: A timestamped join to channel.
+
+CONNECTED: A timestamped connection to the dirc proxy.
+
+DISCONNECTED: A timestamped disconnection from the dirc proxy.
+
+CTCP: A CTCP message from another client.
 
 Misc:
 -----

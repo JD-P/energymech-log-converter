@@ -6,7 +6,7 @@ from utilities.time2seconds import time2seconds
 
 def convert(filepath, log_format):
   """Run toykeeper_converter's conversion function and return the result."""
-  return toykeeper_converter.toykeeper_conv(directory, log_format)
+  return toykeeper_converter.toykeeper_conv(filepath, log_format)
 
 class toykeeper_converter():
   """Converts a custom log format of the form iso standard date, nick and message to json or sqlite."""
@@ -25,12 +25,27 @@ class toykeeper_converter():
       hostmasks[line_id] = components[2]
       contents[line_id] = components[3]
       line_id += 1
-    current_date = None
-    for line in dates:
-      if dates[line] != current_date:
-        current_date = dates[line]
-        date = strptime(dates[line], "%Y-%m-%d")
-      time = time2seconds(timestamps[line])
+    line_types = toykeeper_converter.toykeeper_json(hostmasks, contents)
+    del(loglines)
+    logs = {}
+    current_date = ""
+    current_log = []
+    for date_id in range(len(dates)):
+      if dates[date_id] > current_date:
+        current_log = []
+        for line_id in range(date_id):
+          time_ = time2seconds(timestamps[line_id])
+          current_log.append(toykeeper_converter.construct(line_id, line_types[line_id], time_, hostmasks[line_id], contents[line_id]))
+        current_log.sort()
+        date = time.strptime(dates[date_id], "%Y-%m-%d")
+        datestamp = int(time.mktime(date))
+        logs[datestamp] = current_log 
+        current_date = dates[date_id]
+    current_log.sort()
+    date = time.strptime(dates[date_id], "%Y-%m-%d")
+    datestamp = int(time.mktime(date))
+    logs[datestamp] = current_log
+    return logs
       
   def toykeeper_json(hostmasks_dict, contents_dict):
     """Classify lines according to their contents and return a dictionary of the form {line_id:line_type...}
@@ -54,8 +69,10 @@ class toykeeper_converter():
             line_types[line] = "CONNECTED"
           elif contents == "You disconnected\n":
             line_types[line] = "DISCONNECTED"
-        elif contents == "You joined the channel\n"
+        elif contents == "You joined the channel\n":
           line_types[line] = "JOINED"
+        elif len(content_split) < 3: # Notices use '--' to denote themselves and have no distinguishing marks besides, we start by filtering out those with lengths too short for the other tests
+          line_types[line] = "NOTICE"
         elif content_split[2] == "joined":
           line_types[line] = "JOIN"
         elif content_split[2] == "left":
@@ -64,13 +81,17 @@ class toykeeper_converter():
           line_types[line] = "KICK"
         elif content_split[0][0] + content_split[0][-1] == "[]":
           line_types[line] = "NOTICE"
-        elif content_split[2] + content_split[3] == "changedmode:" or content_split[1] + content_split[2] == "changedmode:":
-          line_types[line] = "SETMODE"
-        elif content_split[2] + content_split[3] == "changedtopic:" or content_split[1] + content_split[2] == "changedtopic:":
-          line_types[line] = "TOPIC"
-        elif contents[0:4] == "CTCP":
+        try:
+          if content_split[1] + content_split[2]  == "changedmode:" or content_split[2] + content_split[3] == "changedmode:":
+            line_types[line] = "SETMODE"
+          elif content_split[1] + content_split[2] == "changedtopic:" or content_split[2] + content_split[3] == "changedtopic:":
+            line_types[line] = "TOPIC"
+        except IndexError:
+          line_types[line] = "NOTICE"
+        if contents[0:4] == "CTCP":
           line_types[line] = "CTCP"
     return line_types
+
   def construct(line_id, line_type, time_, hostmask, contents):
     """Construct a line suitable for output in line with the generic python format energymech log converter uses."""
     type_is = (lambda linetype : line_type == linetype)
@@ -85,11 +106,11 @@ class toykeeper_converter():
       userhost = toykeeper_converter.hostmask_stripper(content_split[1])
       (nick, user, hostname) = (content_split[0], userhost[0], userhost[1])
       hostmask = toykeeper_converter.construct_hostmask(nick, user, hostname)
-      return universal + (hostmask)
+      return universal + (hostmask,)
     elif type_is("KICK"):
       kick_split = contents.split(" ", 6)
       userhost = toykeeper_converter.hostmask_stripper(kick_split[5])
-      (nick, user, hostname) = (kick_split[4], userhost[0], ,userhost[1])
+      (nick, user, hostname) = (kick_split[4], userhost[0], userhost[1])
       hostmask = toykeeper_converter.construct_hostmask(nick, user, hostname)
       (nick_kicked, kick_message) = (kick_split[0], kick_split[6])
       return universal + (nick_kicked, hostmask, kick_message)

@@ -70,9 +70,11 @@ TOPIC: [line_id, "TOPIC", timestamp in seconds, changed_by, topic]
 Message types for toykeeper:
 ----------------------------
 
-PRIVMSG, NOTICE, JOIN, PART, KICK, SETMODE, TOPIC, CTCP, JOINED, CONNECTED, DISCONNECTED
+PRIVMSG, ACTION, NOTICE, JOIN, PART, KICK, SETMODE, TOPIC, CTCP, JOINED, CONNECTED, DISCONNECTED
 
 PRIVMSG: [line_id, "PRIVMSG", timestamp in seconds, nickname, message]
+
+ACTION: [line_id, "ACTION", timestamp in seconds, nickname, message]
 
 NOTICE: [line_id, "NOTICE", timestamp in seconds, nickname, message]
 
@@ -95,6 +97,8 @@ CONNECTED: [line_id, "CONNECTED", timestamp in seconds]
 DISCONNECTED: [line_id, "CONNECTED", timestamp in seconds]
 
 Meaning of special message types for toykeeper:
+
+ACTION: A plaintext token to signify /me.
 
 JOINED: A timestamped join to channel.
 

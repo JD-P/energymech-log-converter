@@ -100,7 +100,7 @@ Meaning of special message types for toykeeper:
 
 ACTION: A plaintext token to signify /me.
 
-JOINED: A timestamped join to channel.
+JOINED: A timestamped join to channel from the logging client.
 
 CONNECTED: A timestamped connection to the dirc proxy.
 

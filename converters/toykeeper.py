@@ -91,6 +91,8 @@ class toykeeper_converter():
         line_type = "NOTICE"
       if contents[0:4] == "CTCP":
         line_type = "CTCP"
+      else:
+        line_type = "NOTICE"
     return line_type
 
   def construct(line_id, line_type, time_, hostmask, contents):

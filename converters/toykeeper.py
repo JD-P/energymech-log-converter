@@ -4,15 +4,17 @@ import time
 
 from datetime import timedelta
 
-from utilities.time2seconds import time2seconds
-
 from calendar import timegm
 
-def convert(filepath, log_format, utc_offset=None):
-  """Run toykeeper_converter's conversion function and return the result."""
-  return toykeeper_converter.toykeeper_conv(filepath, log_format, utc_offset)
+from utilities.time2seconds import time2seconds
 
-class toykeeper_converter():
+
+
+def convert(filepath, log_format, utc_offset=None):
+  """Run ToyKeeperConverter's conversion function and return the result."""
+  return ToyKeeperConverter.toykeeper_conv(filepath, log_format, utc_offset)
+
+class ToyKeeperConverter():
   """Converts a custom log format of the form iso standard date, nick and message to json or sqlite."""
   def toykeeper_conv(filepath, log_format, utc_offset):
     logfile = open(filepath, 'r', encoding='latin-1')
@@ -28,27 +30,27 @@ class toykeeper_converter():
     def process_line(line_id, line, offset):
       components = (lambda space_split : (space_split[0], space_split[1], space_split[2].split("\t")[0], space_split[2].split("\t")[1]))(line.split(" ", 2))
       (date, timestamp, hostmask, contents) = (components[0], components[1], components[2], components[3])
-      line_type = toykeeper_converter.toykeeper_json(hostmask, contents)
-      (offset_timestamp, offset_datestamp) = toykeeper_converter.calculate_offset(date, timestamp, offset)
-      converted_line = toykeeper_converter.construct(line_id, line_type, offset_timestamp, hostmask, contents)
+      line_type = ToyKeeperConverter.toykeeper_json(hostmask, contents)
+      (offset_timestamp, offset_datestamp) = ToyKeeperConverter.calculate_offset(date, timestamp, offset)
+      converted_line = ToyKeeperConverter.construct(line_id, line_type, offset_timestamp, hostmask, contents)
       return {"converted_line":converted_line, "offset_datestamp":offset_datestamp, "date":date, "timestamp":timestamp, "hostmask":hostmask, "contents":contents}
     iter_id = queue.add_iter(iter(("\n\n  " + str(process_line(line_id, line, utc_offset)["offset_datestamp"]) + ":\n    [", "\n    ],")))
     queue.add(iter_id)
     queue.add(iter_id)
-    toykeeper_converter.output(queue.tick())
+    ToyKeeperConverter.output(queue.tick())
     line_id += 1
     for line in loglines[1:]:
       line_elements = process_line(line_id, line, utc_offset)
       if line_elements["date"] > current_date:
         current_date = line_elements["date"]
-        toykeeper_converter.output(queue.tick())
+        ToyKeeperConverter.output(queue.tick())
         iter_id = queue.add_iter(iter(("\n    ],", "\n\n  " + str(line_elements["offset_datestamp"]) + ":\n    [")))
         queue.add(iter_id)
         queue.add(iter_id)
-        toykeeper_converter.output(queue.tick())
-      toykeeper_converter.output(json.dumps((" " * 6) + str(line_elements["converted_line"]) + ",\n"))
+        ToyKeeperConverter.output(queue.tick())
+      ToyKeeperConverter.output(json.dumps((" " * 6) + str(line_elements["converted_line"]) + ",\n"))
       line_id += 1  
-    toykeeper_converter.output(queue.tick())
+    ToyKeeperConverter.output(queue.tick())
     return None
   
   def toykeeper_json(hostmask, contents):
@@ -106,15 +108,15 @@ class toykeeper_converter():
 
     content_split = contents.split(" ")
     if type_is("JOIN") or type_is("PART"):
-      userhost = toykeeper_converter.hostmask_stripper(content_split[1])
+      userhost = ToyKeeperConverter.hostmask_stripper(content_split[1])
       (nick, user, hostname) = (content_split[0], userhost[0], userhost[1])
-      hostmask = toykeeper_converter.construct_hostmask(nick, user, hostname)
+      hostmask = ToyKeeperConverter.construct_hostmask(nick, user, hostname)
       return universal + (hostmask,)
     elif type_is("KICK"):
       kick_split = contents.split(" ", 6)
-      userhost = toykeeper_converter.hostmask_stripper(kick_split[5])
+      userhost = ToyKeeperConverter.hostmask_stripper(kick_split[5])
       (nick, user, hostname) = (kick_split[4], userhost[0], userhost[1])
-      hostmask = toykeeper_converter.construct_hostmask(nick, user, hostname)
+      hostmask = ToyKeeperConverter.construct_hostmask(nick, user, hostname)
       (nick_kicked, kick_message) = (kick_split[0], kick_split[6])
       return universal + (nick_kicked, hostmask, kick_message)
     elif type_is("SETMODE"):
@@ -124,11 +126,11 @@ class toykeeper_converter():
         return universal + (set_by, mode_string)
       elif setmode_split[3] == "mode:":
         setmode_split = contents.split(" ", 4)
-        userhost = toykeeper_converter.hostmask_stripper(setmode_split[1])
+        userhost = ToyKeeperConverter.hostmask_stripper(setmode_split[1])
         nick = setmode_split[0]
         user = hostmask_split[0]
         hostname = hostmask_split[1]
-        set_by = toykeeper_converter.construct_hostmask(nick, user, hostname)
+        set_by = ToyKeeperConverter.construct_hostmask(nick, user, hostname)
         return universal + (set_by, setmode_split[4])
     elif type_is("TOPIC"):
       topic_split = contents.split(" ", 3) # The size of topicsplit varies so we assume it's the shorter version to avoid a ValueError
@@ -137,9 +139,9 @@ class toykeeper_converter():
         return universal + (changed_by, topic)
       elif topic_split[3] == "topic:":
         topic_split = contents.split(" ", 4)
-        userhost = toykeeper_converter.hostmask_stripper(topic_split[1])
+        userhost = ToyKeeperConverter.hostmask_stripper(topic_split[1])
         (nick, user, hostname, topic) = (topic_split[0], userhost[0], userhost[1], topic_split[4])
-        changed_by = toykeeper_converter.construct_hostmask(nick, user, hostname)
+        changed_by = ToyKeeperConverter.construct_hostmask(nick, user, hostname)
         return universal + (changed_by, topic)
     elif type_is("JOINED") or type_is("CONNECTED") or type_is("DISCONNECTED"):
       return universal

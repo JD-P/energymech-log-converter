@@ -1,3 +1,5 @@
+import json
+
 import time
 
 from datetime import timedelta
@@ -8,7 +10,7 @@ from calendar import timegm
 
 def convert(filepath, log_format, utc_offset=None):
   """Run toykeeper_converter's conversion function and return the result."""
-  return toykeeper_converter.toykeeper_conv(filepath, log_format, utc_offset_delta)
+  return toykeeper_converter.toykeeper_conv(filepath, log_format, utc_offset)
 
 class toykeeper_converter():
   """Converts a custom log format of the form iso standard date, nick and message to json or sqlite."""
@@ -23,34 +25,33 @@ class toykeeper_converter():
     queue.tick()
     line = loglines[0]
 
-    def process_line(line_id, line):
+    def process_line(line_id, line, offset):
       components = (lambda space_split : (space_split[0], space_split[1], space_split[2].split("\t")[0], space_split[2].split("\t")[1]))(line.split(" ", 2))
       (date, timestamp, hostmask, contents) = (components[0], components[1], components[2], components[3])
       line_type = toykeeper_converter.toykeeper_json(hostmask, contents)
-      converted_line = toykeeper_converter.construct(line_id, line_type, timestamp, hostmask, contents)
       (offset_timestamp, offset_datestamp) = toykeeper_converter.calculate_offset(date, timestamp, offset)
-      return {"converted_line":converted_line, "offset_timestamp":offset_timestamp, "offset_datestamp":offset_datestamp, "date":date, "timestamp":timestamp, "hostmask":hostmask, "contents":contents}
-    iter_id = queue.add_iter(iter(("\n\n  " + str(process_line(line_id, line)["offset_datestamp"]) + ":\n  [", "\n    ],")))
+      converted_line = toykeeper_converter.construct(line_id, line_type, offset_timestamp, hostmask, contents)
+      return {"converted_line":converted_line, "offset_datestamp":offset_datestamp, "date":date, "timestamp":timestamp, "hostmask":hostmask, "contents":contents}
+    iter_id = queue.add_iter(iter(("\n\n  " + str(process_line(line_id, line, utc_offset)["offset_datestamp"]) + ":\n    [", "\n    ],")))
+    queue.add(iter_id)
     queue.add(iter_id)
     toykeeper_converter.output(queue.tick())
     line_id += 1
     for line in loglines[1:]:
-      line_elements = process_line(line_id, line)
+      line_elements = process_line(line_id, line, utc_offset)
       if line_elements["date"] > current_date:
         current_date = line_elements["date"]
-        next_token = queue.tick()
-        if next_token == "\n    ],":
-          iter_id = queue.add_iter(iter(("\n    ],", "\n\n  " + str(offset_datestamp) + ":\n  [")))
-          queue.add(iter_id)
-          queue.add(iter_id)
-          toykeeper_converter.output(next_token)
-        else:
-          toykeeper_converter.output(next_token)
+        toykeeper_converter.output(queue.tick())
+        iter_id = queue.add_iter(iter(("\n    ],", "\n\n  " + str(line_elements["offset_datestamp"]) + ":\n    [")))
+        queue.add(iter_id)
+        queue.add(iter_id)
+        toykeeper_converter.output(queue.tick())
+      toykeeper_converter.output(json.dumps((" " * 6) + str(line_elements["converted_line"]) + ",\n"))
       line_id += 1  
-        
-      
-    queue.tick()  
-  def toykeeper_json(line_tuple):
+    toykeeper_converter.output(queue.tick())
+    return None
+  
+  def toykeeper_json(hostmask, contents):
     """Classify lines according to their contents and return a dictionary of the form {line_id:line_type...}
     
     Keyword arguments:
@@ -58,7 +59,6 @@ class toykeeper_converter():
       contents_dict | A dictionary of the form {line_id:contents, line_id:contents...}
     """
     line_types = {}
-    (hostmask, contents) = (line_tuple[2], line_tuple[3])
     if hostmask[0] + hostmask[-1] == "<>":
       line_type = "PRIVMSG"
     elif hostmask[0] + hostmask[-1] == "[]" and contents[0:6] == "ACTION":
@@ -165,7 +165,7 @@ class toykeeper_converter():
     """
     timestamp = int(time.mktime(time.strptime(date, "%Y-%m-%d"))) + time2seconds(time_)
     if offset == None:
-      return timestamp
+      return (time2seconds(time_), int(time.mktime(time.strptime(date, "%Y-%m-%d"))))
     else:
       try:  
         offset_timestamp = timestamp - ((int(offset)) * (60 ** 2))
@@ -179,32 +179,32 @@ class toykeeper_converter():
 
   def output(string):
     """Handles output for files and to standard output. (Currently a wrapper around print() for when I make something that's less of a hack.)"""
-    print(string)
+    print(string, end="")
 
 class output_queue():
   """Implements an output queue of iterators."""
   def __init__(self):
-    queue = []
-    iterators = {}
-  def tick():
+    self.queue = []
+    self.iterators = {}
+  def tick(self):
     """Outputs an item from the next iterator in the queue."""
     next_output = self.queue.pop()
-    next_item = next(iterators[next_output])
+    next_item = next(self.iterators[next_output])
     print(next_item)
-  def add(iter_id):
+  def add(self, iter_id):
     """Set an iterator to be executed at the next tick.
     Keyword arguments:
       iter_id | A unique ID assigned to every iterator added to iterators.
     """
     self.queue.append(iter_id)
-  def iter_add(iterator):
+  def add_iter(self, iterator):
     """Add an iterator to the set of iterators that are in this queue."""
     iter_id = len(self.iterators)
     self.iterators[iter_id] = iterator
     return iter_id
-  def upcoming(position):
+  def upcoming(self, position):
     """Return the iter_id in queue at position."""
     return self.queue[position]
-  def pop_iter(iter_id):
+  def pop_iter(self, iter_id):
     """Return the iterator from iterators with the given iter_id."""
     return self.iterators.pop(iter_id)

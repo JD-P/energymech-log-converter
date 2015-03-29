@@ -96,9 +96,11 @@ class ToyKeeperConverter():
       elif content_split[0][0] + content_split[0][-1] == "[]":
         line_type = "NOTICE"
       try:
-        if content_split[1] + content_split[2]  == "changedmode:" or content_split[2] + content_split[3] == "changedmode:":
+        if (content_split[1] + content_split[2]  == "changedmode:") or 
+        (content_split[2] + content_split[3] == "changedmode:"):
           line_type = "SETMODE"
-        elif content_split[1] + content_split[2] == "changedtopic:" or content_split[2] + content_split[3] == "changedtopic:":
+        elif (content_split[1] + content_split[2] == "changedtopic:") or 
+        (content_split[2] + content_split[3] == "changedtopic:"):
           line_type = "TOPIC"
       except IndexError:
         line_type = "NOTICE"

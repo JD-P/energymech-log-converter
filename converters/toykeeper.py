@@ -39,10 +39,12 @@ class ToyKeeperConverter():
       converted_line = cls.construct(line_id, line_type, offset_timestamp, hostmask, contents)
       return {"converted_line":converted_line, "offset_datestamp":offset_datestamp, 
               "date":date, "timestamp":timestamp, "hostmask":hostmask, "contents":contents}
-    iter_id = queue.add_iter(iter(("\n\n  " + str(process_line(line_id, line, utc_offset)["offset_datestamp"]) + ":\n    [", "\n    ],")))
+    line_elements = process_line(line_id, line, utc_offset)
+    iter_id = queue.add_iter(iter(("\n\n  " + str(line_elements["offset_datestamp"]) + ":\n    [", "\n    ],")))
     queue.add(iter_id)
     queue.add(iter_id)
     cls.output(queue.tick())
+    cls.output(json.dumps(("\n" + " " * 6) + str(line_elements["converted_line"]) + ",\n"))
     line_id += 1
     for line in loglines[1:]:
       line_elements = process_line(line_id, line, utc_offset)
@@ -54,7 +56,7 @@ class ToyKeeperConverter():
         queue.add(iter_id)
         queue.add(iter_id)
         cls.output(queue.tick())
-      cls.output(json.dumps((" " * 6) + str(line_elements["converted_line"]) + ",\n"))
+      cls.output(json.dumps(("\n" + " " * 6) + str(line_elements["converted_line"]) + ",\n"))
       line_id += 1  
     cls.output(queue.tick())
     return None

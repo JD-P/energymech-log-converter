@@ -11,7 +11,7 @@ from utilities.time2seconds import time2seconds
 
 def convert(filepath, log_format, utc_offset=None):
   """Run ToyKeeperConverter's conversion function and return the result."""
-  return ToyKeeperConverter.toykeeper_conv(filepath, log_format, utc_offset)
+  return ToyKeeperConverter.toykeeper_conv(ToyKeeperConverter,filepath, log_format, utc_offset)
 
 
 class ToyKeeperConverter():
@@ -43,22 +43,22 @@ class ToyKeeperConverter():
     iter_id = queue.add_iter(iter(("\n\n  " + str(line_elements["offset_datestamp"]) + ":\n    [", "\n    ],")))
     queue.add(iter_id)
     queue.add(iter_id)
-    cls.output(queue.tick())
-    cls.output(json.dumps(("\n" + " " * 6) + str(line_elements["converted_line"]) + ",\n"))
+    cls.output(cls, queue.tick())
+    cls.output(cls, json.dumps(("\n" + " " * 6) + str(line_elements["converted_line"]) + ",\n"))
     line_id += 1
     for line in loglines[1:]:
       line_elements = process_line(line_id, line, utc_offset)
       if line_elements["date"] > current_date:
         current_date = line_elements["date"]
-        cls.output(queue.tick())
+        cls.output(cls, queue.tick())
         iter_id = queue.add_iter(iter(("\n    ],", 
                                        "\n\n  " + str(line_elements["offset_datestamp"]) + ":\n    [")))
         queue.add(iter_id)
         queue.add(iter_id)
-        cls.output(queue.tick())
-      cls.output(json.dumps(("\n" + " " * 6) + str(line_elements["converted_line"]) + ",\n"))
+        cls.output(cls, queue.tick())
+      cls.output(cls, json.dumps(("\n" + " " * 6) + str(line_elements["converted_line"]) + ",\n"))
       line_id += 1  
-    cls.output(queue.tick())
+    cls.output(cls, queue.tick())
     return None
   
   def toykeeper_json(hostmask, contents):
@@ -87,7 +87,7 @@ class ToyKeeperConverter():
       we start by filtering out those with lengths too short for the 
       other tests.
       """
-      elif len(content_split) < 3: 
+      if len(content_split) < 3: 
         line_type = "NOTICE"
       elif content_split[2] == "joined":
         line_type = "JOIN"
@@ -98,11 +98,11 @@ class ToyKeeperConverter():
       elif content_split[0][0] + content_split[0][-1] == "[]":
         line_type = "NOTICE"
       try:
-        if (content_split[1] + content_split[2]  == "changedmode:") or 
-        (content_split[2] + content_split[3] == "changedmode:"):
+        if (content_split[1] + content_split[2]  == "changedmode:" or 
+        content_split[2] + content_split[3] == "changedmode:"):
           line_type = "SETMODE"
-        elif (content_split[1] + content_split[2] == "changedtopic:") or 
-        (content_split[2] + content_split[3] == "changedtopic:"):
+        elif (content_split[1] + content_split[2] == "changedtopic:" or 
+        content_split[2] + content_split[3] == "changedtopic:"):
           line_type = "TOPIC"
       except IndexError:
         line_type = "NOTICE"

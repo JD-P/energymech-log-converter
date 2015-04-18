@@ -9,23 +9,21 @@ from calendar import timegm
 from utilities.time2seconds import time2seconds
 
 
-def convert(filepath, log_format, utc_offset=None):
+def convert(filepath, output_handler=None, utc_offset=None):
   """Run ToyKeeperConverter's conversion function and return the result."""
-  return ToyKeeperConverter.toykeeper_conv(ToyKeeperConverter,filepath, log_format, utc_offset)
+  return ToyKeeperConverter.toykeeper_conv(ToyKeeperConverter,filepath, output_handler, utc_offset)
 
 
 class ToyKeeperConverter():
   """Converts a custom log format of the form iso standard date, nick and message to json or sqlite."""
-  def toykeeper_conv(cls, filepath, log_format, utc_offset):
-    logfile = open(filepath, 'r', encoding='latin-1')
-    loglines = logfile.readlines()
-    line_id = 0
-    current_date = loglines[0].split(" ")[0]
-    queue = output_queue()
-    queue.add_iter(iter(("{\n", "\n}")))
-    queue.add(0)
-    queue.tick()
-    line = loglines[0]
+
+
+  def toykeeper_conv(cls, filepath, output_handler, utc_offset):
+ 
+    if output_handler:
+      output_handler.begin()
+    else:
+      logs = {}       
 
     def process_line(line_id, line, offset):
       components = (lambda space_split : (space_split[0], space_split[1], 
@@ -34,34 +32,44 @@ class ToyKeeperConverter():
                                           (line.split(" ", 2))
       (date, timestamp, hostmask, contents) = (components[0], components[1], 
                                                components[2], components[3])
-      line_type = cls.toykeeper_json(hostmask, contents)
+      line_type = cls.toykeeper_linetype(hostmask, contents)
       (offset_timestamp, offset_datestamp) = cls.calculate_offset(date, timestamp, offset)
       converted_line = cls.construct(line_id, line_type, offset_timestamp, hostmask, contents)
       return {"converted_line":converted_line, "offset_datestamp":offset_datestamp, 
               "date":date, "timestamp":timestamp, "hostmask":hostmask, "contents":contents}
-    line_elements = process_line(line_id, line, utc_offset)
-    iter_id = queue.add_iter(iter(("\n\n  " + str(line_elements["offset_datestamp"]) + ":\n    [", "\n    ],")))
-    queue.add(iter_id)
-    queue.add(iter_id)
-    cls.output(cls, queue.tick())
-    cls.output(cls, json.dumps(("\n" + " " * 6) + str(line_elements["converted_line"]) + ",\n"))
-    line_id += 1
-    for line in loglines[1:]:
-      line_elements = process_line(line_id, line, utc_offset)
-      if line_elements["date"] > current_date:
-        current_date = line_elements["date"]
-        cls.output(cls, queue.tick())
-        iter_id = queue.add_iter(iter(("\n    ],", 
-                                       "\n\n  " + str(line_elements["offset_datestamp"]) + ":\n    [")))
-        queue.add(iter_id)
-        queue.add(iter_id)
-        cls.output(cls, queue.tick())
-      cls.output(cls, json.dumps(("\n" + " " * 6) + str(line_elements["converted_line"]) + ",\n"))
-      line_id += 1  
-    cls.output(cls, queue.tick())
-    return None
   
-  def toykeeper_json(hostmask, contents):
+    def shift_day(day,current_date) :
+      if output_handler:
+        output_handler.write_day({current_date:day})
+      else:
+        logs[current_date] = list(day)
+
+    day = []
+    logfile = open(filepath, 'r', encoding='latin-1')
+    current_date = logfile.readline().split(" ")[0]
+    line_id = 0
+
+
+    for line in logfile:
+      line_elements = process_line(line_id, line, utc_offset)
+      day.append(line_elements["converted_line"])
+      if line_elements["date"] > current_date:
+        shift_day(day,current_date)
+        current_date = line_elements["date"]
+        day = []
+
+      line_id += 1  
+    
+    #Final shift_day to account for no date change at the end.
+    shift_day(day,current_date)
+    
+    if output_handler:
+      output_handler.close()
+    else:
+      return logs
+
+  
+  def toykeeper_linetype(hostmask, contents):
     """Classify lines according to their contents and return a dictionary of the 
     form {line_id:line_type...}
     
@@ -112,6 +120,7 @@ class ToyKeeperConverter():
         line_type = "NOTICE"
     return line_type
 
+
   def construct(line_id, line_type, time_, hostmask, contents):
     """Construct a line suitable for output in line with the generic python format energymech log converter uses."""
     def type_is(linetype): return (line_type == linetype)
@@ -120,16 +129,16 @@ class ToyKeeperConverter():
     hostmask = hostmask[1:-1] # Strip buffer characters '<>', '[]', '--'
     if type_is("PRIVMSG") or type_is("ACTION") or type_is("NOTICE") or type_is("CTCP"):
       return universal + (hostmask, contents)
-
+    
     content_split = contents.split(" ")
     if type_is("JOIN") or type_is("PART"):
-      userhost = cls.hostmask_stripper(content_split[1])
+      userhost = cls.strip_hostmask(content_split[1])
       (nick, user, hostname) = (content_split[0], userhost[0], userhost[1])
       hostmask = cls.construct_hostmask(nick, user, hostname)
       return universal + (hostmask,)
     elif type_is("KICK"):
       kick_split = contents.split(" ", 6)
-      userhost = cls.hostmask_stripper(kick_split[5])
+      userhost = cls.strip_hostmask(kick_split[5])
       (nick, user, hostname) = (kick_split[4], userhost[0], userhost[1])
       hostmask = cls.construct_hostmask(nick, user, hostname)
       (nick_kicked, kick_message) = (kick_split[0], kick_split[6])
@@ -141,7 +150,7 @@ class ToyKeeperConverter():
         return universal + (set_by, mode_string)
       elif setmode_split[3] == "mode:":
         setmode_split = contents.split(" ", 4)
-        userhost = cls.hostmask_stripper(setmode_split[1])
+        userhost = cls.strip_hostmask(setmode_split[1])
         nick = setmode_split[0]
         user = hostmask_split[0]
         hostname = hostmask_split[1]
@@ -154,7 +163,7 @@ class ToyKeeperConverter():
         return universal + (changed_by, topic)
       elif topic_split[3] == "topic:":
         topic_split = contents.split(" ", 4)
-        userhost = cls.hostmask_stripper(topic_split[1])
+        userhost = cls.strip_hostmask(topic_split[1])
         (nick, user, hostname, topic) = (topic_split[0], userhost[0], 
                                          userhost[1], topic_split[4])
         changed_by = cls.construct_hostmask(nick, user, hostname)
@@ -164,7 +173,8 @@ class ToyKeeperConverter():
     else:
       raise ValueError("Given type was not in the types of message handled by the toykeeper converter.")
 
-  def hostmask_stripper(cls, userhost):
+
+  def strip_hostmask(cls, userhost):
     """Strip characters from a set of hostmask components to prepare them for processing by construct_hostmask. (USER@HOSTNAME) OR (~USER@HOSTNAME)"""
     userhost_components = userhost[1:-1].split("@")
     if userhost_components[0][0] == "~":
@@ -172,9 +182,11 @@ class ToyKeeperConverter():
     else:
       return (userhost_components[0], userhost_components[1])
 
+
   def construct_hostmask(nick, user, hostname):
     """Takes a nick,user,hostname combo and constructs a string representing it like such: user!~username@127.0.0.1"""
     return nick + "!~" + user + "@" + "hostname"  
+
 
   def calculate_offset(date, time_, offset):
     """Take date, time and offset and calculate the final time from UTC.
@@ -197,41 +209,3 @@ class ToyKeeperConverter():
     datestamp = timegm(date)
     return (time_, datestamp)
 
-  def output(cls, string):
-    """Handles output for files and to standard output. (Currently a wrapper around 
-    print() for when I make something that's less of a hack.)
-    """
-    print(string, end="")
-
-class output_queue():
-  """Implements an output queue of iterators."""
-  def __init__(self):
-    self._queue = []
-    self._iterators = {}
-
-  def tick(self):
-    """Outputs an item from the next iterator in the queue."""
-    next_output = self._queue.pop()
-    next_item = next(self._iterators[next_output])
-    print(next_item)
-
-  def add(self, iter_id):
-    """Set an iterator to be executed at the next tick.
-    Keyword arguments:
-      iter_id | A unique ID assigned to every iterator added to iterators.
-    """
-    self._queue.append(iter_id)
-
-  def add_iter(self, iterator):
-    """Add an iterator to the set of iterators that are in this queue."""
-    iter_id = len(self._iterators)
-    self._iterators[iter_id] = iterator
-    return iter_id
-
-  def upcoming(self, position):
-    """Return the iter_id in queue at position."""
-    return self._queue[position]
-
-  def pop_iter(self, iter_id):
-    """Return the iterator from iterators with the given iter_id."""
-    return self._iterators.pop(iter_id)

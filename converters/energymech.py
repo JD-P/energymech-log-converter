@@ -8,30 +8,41 @@ import string
 
 from utilities.time2seconds import time2seconds
 
-def convert(directory, log_format):
+def convert(directory, output_handler=None, utc_offset=None):
   """Run the energymech log converters conversion function."""
-  return energymech_converter.energymech_conv(directory, log_format)
+  return energymech_converter.energymech_conv(directory, output_handler)
 
 class energymech_converter():
   """Convert an energymech log file to python datastructures."""
-  def energymech_conv(directory, log_format):
+  def energymech_conv(directory, output_handler):
     """Convert a set of log files in energymech format to JSON or SQLite."""
-    if os.path.isdir(directory): 
-      files = os.listdir(directory) 
-      files.sort()
-      logs = {}
-      total_lines = 0
-      for filename in files:
-        datestring = filename.split("_")[2].split(".")[0] #See "Misc 0" in project file.
-        logdate = time.strptime(datestring, "%Y%m%d")
-        date_timestamp = int(time.mktime(logdate))
-        logpath = os.path.join(directory, filename)
-        log_lines = energymech_converter.energymech_parse(logpath, total_lines)
-        logs[date_timestamp] = log_lines[1]
-        total_lines += log_lines[0]
-      return (logs)
-    else:
+    if not os.path.isdir(directory): 
       raise ValueError(directory + " is not a directory.")
+    files = os.listdir(directory) 
+    files.sort()
+
+    if output_handler:
+      output_handler.begin()
+    else:
+      logs = {}
+      
+    day = []
+    total_lines = 0
+    for filename in files:
+      datestring = filename.split("_")[2].split(".")[0] #See "Misc 0" in project file.
+      logdate = time.strptime(datestring, "%Y%m%d")
+      date_timestamp = int(time.mktime(logdate))
+      logpath = os.path.join(directory, filename)
+      log_lines = energymech_converter.energymech_parse(logpath, total_lines)
+      if output_handler:
+        output_handler.write_day({date_timestamp:log_lines[1]})
+      else:
+        logs[date_timestamp] = log_lines[1]
+      total_lines += log_lines[0]
+    if output_handler:
+      output_handler.close()
+    else:
+      return (logs)
 
   def energymech_parse(filepath, total_lines):
     """Take a single log file in energymech format and parse it into a python datastructure."""

@@ -4,9 +4,9 @@
 
 energymech-log-converter - A utility to convert energymech logs to JSON or SQLite
 
-usage: energymech-log-converter.py [Logs Directory] [Options]
+usage: energymech-log-converter.py [Logs] [Options]
 
-Convert the Logs Direcotry to a JSON (default) or SQLite database.
+Convert the logs (file or a directory) to a JSON (default) or SQLite database.
 
 ----
 
@@ -45,7 +45,7 @@ class BufferedOutputHandler():
   def begin(self):
     pass
     
-  def write_day(self):
+  def write_day(self,day):
     pass
 
   def close(self):
@@ -54,7 +54,69 @@ class BufferedOutputHandler():
 
 class BufferedSqliteOutputHandler(BufferedOutputHandler):
   """ To be implemented.. """
-  pass
+  
+  def __init__(self,filepath):
+    self.conn = sqlite3.connect(filepath)
+
+  def create_table(cur,table_def):
+    self.conn.cursor().execute("CREATE TABLE IF NOT EXISTS {}")
+
+  def get_id(self, string, colname, table):
+    """ Retrieve the ID for a string from the table and column.
+        If the string does not yet exist, create it. """
+    cur = self.conn.cursor()
+    cur.execute("SELECT id FROM {} WHERE {} = '{}'".format(table,colname,string))
+    rows = cur.fetchall()
+    if len(rows) == 1:
+      id = rows[0][0]
+    else:
+      cur.execute("INSERT INTO {} VALUES('{}')".format(table,string))
+      id = cur.lastrowid
+    return id
+
+  def begin(self):
+    cur = self.conn.cursor()
+
+    self.create_table("nicks(id INTEGER PRIMARY KEY, nickname TEXT)")
+    self.create_table("users(id INTEGER PRIMARY KEY, username TEXT)")
+    self.create_table("hosts(id INTEGER PRIMARY KEY, hostname TEXT)")
+    self.create_table("modes(id INTEGER PRIMARY KEY, mode TEXT)")
+    self.create_table("servs(id INTEGER PRIMARY KEY, server TEXT)")
+    self.create_table("chans(id INTEGER PRIMARY KEY, channel TEXT)")
+
+    self.create_table("hostmasks(nid INTEGER, uid INTEGER, hid INTEGER)")
+    self.create_table("registered(nid INTEGER, registered TEXT, account TEXT)")
+    self.create_table("privmsgs(id INTEGER, nid INTEGER, message TEXT)") 
+    self.create_table("notices(id INTEGER, nid INTEGER, message TEXT)") 
+    self.create_table("joins(id INTEGER, nid INTEGER, uid INTEGER, hid INTEGER)") 
+    self.create_table("parts(id INTEGER, nid INTEGER, uid INTEGER, hid INTEGER, part_message TEXT)")
+    self.create_table("quits(id INTEGER, nid INTEGER, uid INTEGER, hid INTEGER, quit_message TEXT)")
+    self.create_table("kicks(id INTEGER, nid_kicked INTEGER, nid_kicked_by INTEGER, kick_message TEXT)")
+    self.create_table("nick_changes(id INTEGER, nid_before INTEGER, nid_after INTEGER)")
+    self.create_table("set_modes(id INTEGER, nid_set_by INTEGER, mid INTEGER)")
+    self.create_table("set_topic(id INTEGER, nid_set_by INTEGER, topic TEXT)")
+
+    #Some work required.
+    self.create_table("messages(id INTEGER, time TEXT, type TEXT, origin_id INTEGER)")
+
+    
+  def write_day(self,day):
+    cur = self.conn.cursor()
+    date = day.keys()[0]
+    messages = day[date]
+    for message in messages:
+      line_id = message[0]
+      line_type = message[1]
+      time = message[2]
+      #Somewhat of a reversal of the input string parsing here.
+      if line_type == "SETMODE":
+        nid_set_by = get_id(message[3], 'nickname','nicks')
+        mode_id = get_id(message[4], 'mode', 'modes')
+        cur.execute("INSERT INTO set_modes VALUES({},{},{})".format(line_id, nid_set_by, mode_id))
+
+
+  def close(self):
+    self.conn.close()
 
 
 class BufferedJSONOutputHandler(BufferedOutputHandler):
@@ -64,7 +126,10 @@ class BufferedJSONOutputHandler(BufferedOutputHandler):
     """ Configure the class with output format, path, etc.
         Should probably refactor so that format is handled by subclasses
         implementing this interface rather than internal logic. """
-    self.outfile = open(filepath,'w')
+    if isinstance(filepath,str):
+      self.outfile = open(filepath,'w',encoding='utf-8')
+    else:
+      self.outfile = filepath
     self.prevday = False
     
   def begin(self):

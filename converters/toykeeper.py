@@ -46,16 +46,16 @@ class ToyKeeperConverter():
 
     day = []
     logfile = open(filepath, 'r', encoding='latin-1')
-    current_date = logfile.readline().split(" ")[0]
+    current_date = int(time.mktime(time.strptime(logfile.readline().split(" ")[0], "%Y-%m-%d")))
     line_id = 0
 
 
     for line in logfile:
       line_elements = process_line(line_id, line, utc_offset)
       day.append(line_elements["converted_line"])
-      if line_elements["date"] > current_date:
+      if int(line_elements["offset_datestamp"]) > current_date:
         shift_day(day,current_date)
-        current_date = line_elements["date"]
+        current_date = int(line_elements["offset_datestamp"])
         day = []
 
       line_id += 1  

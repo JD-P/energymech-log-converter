@@ -61,83 +61,89 @@ class BufferedSqliteOutputHandler(BufferedOutputHandler):
     def __init__(self, filepath):
         self.conn = sqlite3.connect(filepath)
 
-    def create_table(cur, table_def):
-        self.conn.cursor().execute("CREATE TABLE IF NOT EXISTS {}")
+    def _create_table(cur, table_def):
+        self.cur.execute("CREATE TABLE IF NOT EXISTS {}")
 
     def begin(self):
-        cur = self.conn.cursor()
+        self.cur = self.conn.cursor()
+        self.cur.execute("PRAGMA foreign_keys = ON;")
+        
         # If two things are equivalent then they determine the same things.
-        self.create_table("nicks(id INTEGER PRIMARY KEY, nickname TEXT UNIQUE)")
-        self.create_table("users(id INTEGER PRIMARY KEY, username TEXT UNIQUE)")
-        self.create_table("client_hosts(id INTEGER PRIMARY KEY, hostname TEXT UNIQUE)")
-        self.create_table("servers(id INTEGER PRIMARY KEY, hostname TEXT UNIQUE)")
-        self.create_table("channels(id INTEGER PRIMARY KEY, nwid INTEGER, channel"
+        self._create_table("nicks(id INTEGER PRIMARY KEY, nickname TEXT UNIQUE)")
+        self._create_table("users(id INTEGER PRIMARY KEY, username TEXT UNIQUE)")
+        self._create_table("client_hosts(id INTEGER PRIMARY KEY, hostname TEXT UNIQUE)")
+        self._create_table("servers(id INTEGER PRIMARY KEY, hostname TEXT UNIQUE)")
+        self._create_table("channels(id INTEGER PRIMARY KEY, nwid INTEGER, channel"
                           " TEXT, FOREIGN KEY(nwid) REFERENCES networks(nwid),"
                           " UNIQUE (nwid, channel))")
-        self.create_table("msg_types(id INTEGER PRIMARY KEY, type TEXT UNIQUE)")
-        self.create_table("networks(server INTEGER PRIMARY KEY, nwid INTEGER"
+        self._create_table("msg_types(id INTEGER PRIMARY KEY, type TEXT UNIQUE)")
+        self._create_table("networks(server INTEGER PRIMARY KEY, nwid INTEGER"
                           " UNIQUE, nw_name TEXT UNIQUE, FOREIGN KEY(server)"
                           " REFERENCES servers(id))") 
 
 
-        self.create_table("hostmasks(id INTEGER PRIMARY KEY, nwid INTEGER, nid INTEGER, uid INTEGER,"
+        self._create_table("hostmasks(id INTEGER PRIMARY KEY, nwid INTEGER, nid INTEGER, uid INTEGER,"
                           " hid INTEGER, FOREIGN KEY(nwid) REFERENCES networks(nwid),"
                           " FOREIGN KEY(nid) REFERENCES nicks(id), FOREIGN KEY(uid)"
                           " REFERENCES users(id), FOREIGN KEY(hid) REFERENCES"
                           " client_hosts(id), UNIQUE (nwid, nid, uid, hid))")
 
 
-        self.create_table("registered(nwid INTEGER, nid INTEGER, time_of INTEGER," 
+        self._create_table("registered(nwid INTEGER, nid INTEGER, time_of INTEGER," 
                           " account INTEGER, FOREIGN KEY(nwid) REFERENCES networks(nwid),"
                           " FOREIGN KEY(nid) REFERENCES nicks(id), FOREIGN"
                           " KEY(account) REFERENCES nicks(id), PRIMARY KEY"
                           " (nwid, nid, time_of))")
 
 
-        self.create_table("messages(id INTEGER PRIMARY KEY, timestamp TEXT, channel"
+        self._create_table("messages(id INTEGER PRIMARY KEY, timestamp TEXT, channel"
                           " INTEGER, type TEXT, FOREIGN KEY(channel) REFERENCES"
                           " channels(id), FOREIGN KEY(type) REFERENCES msg_types(id))")
 
 
-        self.create_table("privmsgs(mid INTEGER PRIMARY KEY, nid INTEGER, message TEXT,"
+        self._create_table("privmsgs(mid INTEGER PRIMARY KEY, nid INTEGER, message TEXT,"
                           " FOREIGN KEY(mid) REFERENCES messages(id), FOREIGN"
                           " KEY(nid) REFERENCES nicks(id))")
  
-        self.create_table("notices(mid INTEGER PRIMARY KEY, nid INTEGER, message TEXT,"
+        self.create_table("actions(mid INTEGER PRIMARY KEY, nid INTEGER, message TEXT,"
+                          " FOREIGN KEY(mid) REFERENCES messages(id), FOREIGN"
+                          " KEY(nid) REFERENCES nicks(id))")
+
+        self._create_table("notices(mid INTEGER PRIMARY KEY, nid INTEGER, message TEXT,"
                           " FOREIGN KEY(mid) REFERENCES messages(id), FOREIGN"
                           " KEY(nid) REFERENCES nicks(id))")
  
-        self.create_table("joins(mid INTEGER PRIMARY KEY, hostmask INTEGER,"
+        self._create_table("joins(mid INTEGER PRIMARY KEY, hostmask INTEGER,"
                           " FOREIGN KEY(mid) REFERENCES messages(id), FOREIGN"
                           " KEY(hostmask) REFERENCES hostmasks(id))")
  
-        self.create_table("parts(mid INTEGER PRIMARY KEY, hostmask INTEGER," 
+        self._create_table("parts(mid INTEGER PRIMARY KEY, hostmask INTEGER," 
                           " part_message TEXT, FOREIGN KEY(mid) REFERENCES"
                           " messages(id), FOREIGN KEY(hostmask) REFERENCES"
                           " hostmasks(id))")
 
-        self.create_table("quits(mid INTEGER PRIMARY KEY, hostmask INTEGER,"
+        self._create_table("quits(mid INTEGER PRIMARY KEY, hostmask INTEGER,"
                           " quit_message TEXT, FOREIGN KEY(mid) REFERENCES"
                           " messages(id), FOREIGN KEY(hostmask) REFERENCES"
                           " hostmasks(id))")
 
-        self.create_table("kicks(mid INTEGER PRIMARY KEY, nid_kicked INTEGER, nid_kicked_by" 
+        self._create_table("kicks(mid INTEGER PRIMARY KEY, nid_kicked INTEGER, nid_kicked_by" 
                           " INTEGER, kick_message TEXT, FOREIGN KEY(mid) REFERENCES"
                           " messages(id), FOREIGN KEY(nid_kicked) REFERENCES"
                           " nicks(id), FOREIGN KEY(nid_kicked_by) REFERENCES"
                           " nicks(id))")
 
-        self.create_table("nick_changes(mid INTEGER PRIMARY KEY, nid_before INTEGER,"
+        self._create_table("nick_changes(mid INTEGER PRIMARY KEY, nid_before INTEGER,"
                           " nid_after INTEGER, FOREIGN KEY(mid) REFERENCES messages(id),"
                           " FOREIGN KEY(nid_before) REFERENCES nicks(id), FOREIGN"
                           " KEY(nid_after) REFERENCES nicks(id))")
 
-        self.create_table("set_modes(mid INTEGER PRIMARY KEY, nid_set_by INTEGER," 
+        self._create_table("set_modes(mid INTEGER PRIMARY KEY, nid_set_by INTEGER," 
                           " mode_string TEXT, FOREIGN KEY(mid) REFERENCES"
                           " messages(id), FOREIGN KEY(nid_set_by) REFERENCES"
                           " nicks(id))")
 
-        self.create_table("set_topic(mid INTEGER PRIMARY KEY, nid_set_by INTEGER," 
+        self._create_table("set_topic(mid INTEGER PRIMARY KEY, nid_set_by INTEGER," 
                           " topic TEXT, FOREIGN KEY(mid) REFERENCES messages(id),"
                           " FOREIGN KEY(nid_set_by) REFERENCES nicks(id))")
 
@@ -147,21 +153,89 @@ class BufferedSqliteOutputHandler(BufferedOutputHandler):
         
         Keyword Arguments:
             day:
-                A dictionary with different contents depending on its "type" attribute.
+                A list with dictionaries of different contents depending on its
+                "type" attribute.
+
                 Types:
                 
                 PRIVMSG:
+                    [type]: The type of message.
+                    [id]: unique integer identifying the message
+                    [timpstamp]: A Unix timestamp for the message.
+                    [channel]: The name of the channel the message originated from.
+                    [nickname]: Nickname of the client that sent the message.
+                    [message]: The text of the message sent.
+                ACTION:
+                    [type]: The type of message.
+                    [id]: unique integer identifying the message
+                    [timpstamp]: A Unix timestamp for the message.
+                    [channel]: The name of the channel the message originated from.
+                    [nickname]: Nickname of the client that sent the message.
+                    [message]: The text of the message sent.
                 NOTICE:
+                    [type]: The type of message.
+                    [id]: unique integer identifying the message
+                    [timpstamp]: A Unix timestamp for the message.
+                    [channel]: The name of the channel the message originated from.
+                    [nickname]: Nickname of the client that sent the message.
+                    [message]: The text of the message sent.                   
                 JOIN:
-                    id: unique integer identifying the message
-                    nickname: nickname of the person who joined
-                    
+                    [type]: The type of message.
+                    [id]: unique integer identifying the message
+                    [timpstamp]: A Unix timestamp for the message.
+                    [channel]: The name of the channel the message originated from.
+                    [hostmask]: The hostmask of the client that joined.
                 PART:
+                    [type]: The type of message.
+                    [id]: unique integer identifying the message
+                    [timpstamp]: A Unix timestamp for the message.
+                    [channel]: The name of the channel the message originated from.
+                    [hostmask]: The hostmask of the client that parted.
+                    [part_message]: The part message given by the client.
                 QUIT:
+                    [type]: The type of message.
+                    [id]: unique integer identifying the message
+                    [timpstamp]: A Unix timestamp for the message.
+                    [channel]: The name of the channel the message originated from.
+                    [hostmask]: The hostmask of the client that quit.
+                    [quit_message]: The quit message given by the client.
                 KICK:
+                    [type]: The type of message.
+                    [id]: unique integer identifying the message
+                    [timpstamp]: A Unix timestamp for the message.
+                    [channel]: The name of the channel the message originated from.
+                    [kicked]: The hostmask of the client that was kicked.
+                    [kicked_by]: The hostmask of the client that kicked user.
+                    [kick_message]: The kick message given by the kicking client.
                 NICK:
+                    [type]: The type of message.
+                    [id]: unique integer identifying the message
+                    [timpstamp]: A Unix timestamp for the message.
+                    [channel]: The name of the channel the message originated from.
+                    [before]: The clients nick before the change.
+                    [after]: The clients nick after the change.
                 MODE:
-                TOPIC: 
+                    [type]: The type of message.
+                    [id]: unique integer identifying the message
+                    [timpstamp]: A Unix timestamp for the message.
+                    [channel]: The name of the channel the message originated from.
+                    [set_by]: The nick of the client that set the mode.
+                    [mode]: The string of the mode that was set by the client.
+                TOPIC:
+                    [type]: The type of message.
+                    [id]: unique integer identifying the message
+                    [timpstamp]: A Unix timestamp for the message.
+                    [channel]: The name of the channel the message originated from.
+                    [changed_by]: The nick of the client that changed the topic.
+                    [topic]: The text of the new topic.
+
+                The following should be normalized to lowercase before insertion 
+                into the database:
+
+                    - Nicknames
+                    - Channel Names
+                    - Hosts in hostmasks 
+        """
         cur = self.conn.cursor()
         date = day.keys()[0]
         messages = day[date]
